@@ -1,3 +1,7 @@
+import sqlite3
+import json
+from models import Metal
+
 METALS = [
     {
         "id": 1,
@@ -29,18 +33,72 @@ METALS = [
 
 def get_all_metals():
     """Returns list of dictionaries stored in METALS variable"""
-    return METALS
+    with sqlite3.connect("./kneeldiamonds.sqlite3") as conn:
+        conn.row_factory = sqlite3.Row
+        db_cursor = conn.cursor()
+
+        db_cursor.execute("""
+        SELECT
+            m.id,
+            m.metal,
+            m.price
+        FROM metals m
+        """)
+
+        metals = []
+
+        dataset = db_cursor.fetchall()
+
+        for row in dataset:
+
+            metal = Metal(row['id'], row['metal'], row['price'])
+
+            metals.append(metal.__dict__)
+
+    return metals
 
 def get_single_metal(id):
-    # Variable to hold the found metal, if it exists
-    requested_metal = None
+    """arg: int id, function to return a single metal dictionary"""
+    with sqlite3.connect("./kneeldiamonds.sqlite3") as conn:
+        conn.row_factory = sqlite3.Row
+        db_cursor = conn.cursor()
 
-    # Iterate the METALS list above. Very similar to the
-    # for..of loops you used in JavaScript.
-    for metal in METALS:
-        # Dictionaries in Python use [] notation to find a key
-        # instead of the dot notation that JavaScript used.
-        if metal["id"] == id:
-            requested_metal = metal
+        db_cursor.execute("""
+        SELECT
+            m.id,
+            m.metal,
+            m.price
+        FROM metals m
+        WHERE m.id = ?
+        """, ( id, ))
 
-    return requested_metal
+        # Load the single result into memory
+        data = db_cursor.fetchone()
+
+        metal = Metal(data['id'], data['metal'], data['price'])
+
+    return metal.__dict__
+
+def update_metal(id, metal_update):
+    """finds metal dictionary, replaces with new one"""
+    with sqlite3.connect("./kneeldiamonds.sqlite3") as conn:
+        db_cursor = conn.cursor()
+
+        db_cursor.execute("""
+        UPDATE Metals
+            SET
+                metal = ?,
+                price = ?
+        WHERE id = ?
+        """, (metal_update['metal'], metal_update['price'], id, ))
+
+        # Were any rows affected?
+        # Did the client send an `id` that exists?
+        rows_affected = db_cursor.rowcount
+
+    if rows_affected == 0:
+        # Forces 404 response by main module
+        return False
+    else:
+        # Forces 204 response by main module
+        return True

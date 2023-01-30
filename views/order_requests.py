@@ -1,3 +1,8 @@
+import sqlite3
+import json
+# import the Orders class so that you can create instances of it for each row of data that gets returned from the database.
+from models import Orders, Metal, Size, Style
+
 ORDERS = [
     {
         "id": 1,
@@ -18,56 +23,139 @@ ORDERS = [
 
 def get_all_orders():
     """Returns list of dictionaries stored in ORDERS variable"""
-    return ORDERS
+    # Open a connection to the database
+    with sqlite3.connect("./kneeldiamonds.sqlite3") as conn:
+
+        # Just use these. It's a Black Box.
+        conn.row_factory = sqlite3.Row
+        db_cursor = conn.cursor()
+
+    # Write the SQL query to get the information you want
+        db_cursor.execute("""
+        SELECT
+            o.id,
+            o.metal_id,
+            o.size_id,
+            o.style_id,
+            o.timestamp
+            m.metal metals_metal,
+            m.price metals_price,
+            s.carets sizes_carets,
+            s.price sizes_price,
+            t.style styles_style,
+            t.price styles_price
+        FROM orders o
+        JOIN Metals m 
+        ON m.id = o.metal_id
+        JOIN Sizes s 
+        ON s.id = o.size_id
+        JOIN Styles t
+        ON t.id = o.style_id
+        """)
+
+        # Initialize an empty list to hold all order representations
+        orders = []
+
+        # Convert rows of data into a Python list
+        dataset = db_cursor.fetchall()
+
+        # Iterate list of data returned from database
+        for row in dataset:
+
+            # Create an order instance from the current row.
+            # Note that the database fields are specified in
+            # exact order of the parameters defined in the
+            # Order class above.
+            order = Orders(row['id'], row['metal_id'], row['size_id'], 
+                            row['style_id'], row['timestamp'])
+            
+            metal = Metal(row['id'], row['metals_metal'], row['metals_price'])
+            
+            del metal.id
+
+            size = Size(row['id'], row['sizes_carets'], row['sizes_price'])
+
+            del size.id
+
+            style = Style(row['id'], row['styles_style'], row['styles_price'])
+
+            del style.id
+
+            order.metal = metal.__dict__
+
+            order.size = size.__dict__
+
+            order.style = style.__dict__
+
+
+            orders.append(order.__dict__)
+                            
+
+            orders.append(order.__dict__)
+
+    return orders
 
 def get_single_order(id):
-    # Variable to hold the found order, if it exists
-    requested_order = None
+    """Returns dictionary of single order from list stored in ORDERS"""
+    with sqlite3.connect("./kneeldiamonds.sqlite3") as conn:
+        conn.row_factory = sqlite3.Row
+        db_cursor = conn.cursor()
 
-    # Iterate the ORDERS list above. Very similar to the
-    # for..of loops you used in JavaScript.
-    for order in ORDERS:
-        # Dictionaries in Python use [] notation to find a key
-        # instead of the dot notation that JavaScript used.
-        if order["id"] == id:
-            requested_order = order
+        # Use a ? parameter to inject a variable's value
+        # into the SQL statement.
+        db_cursor.execute("""
+        SELECT
+            o.id,
+            o.metal_id,
+            o.size_id,
+            o.style_id,
+            o.timestamp
+        FROM orders o
+        WHERE o.id = ?
+        """, (id, ))
 
-    return requested_order
+        # Load the single result into memory
+        data = db_cursor.fetchone()
 
-def create_order(order):
-    """function--take new dictionary representation sent by the client
-        and append it to the LOCATIONS list"""
-    # Get the id value of the last order in the list
-    max_id = ORDERS[-1]["id"]
+        # Create an animal instance from the current row
+        order = Orders(data['id'], data['metal_id'], data['size_id'], 
+                            data['style_id'], data['timestamp'])
 
-    # Add 1 to whatever that number is
-    new_id = max_id + 1
+        return order.__dict__
 
-    # Add an `id` property to the order dictionary
-    order["id"] = new_id
+def create_order(new_order):
+    """Returns new dictionary with id property added"""
+    with sqlite3.connect("./kneeldiamonds.sqlite3") as conn:
+        db_cursor = conn.cursor()
 
-    # Add the order dictionary to the list
-    ORDERS.append(order)
+        db_cursor.execute("""
+        INSERT INTO Orders
+            ( metal_id, size_id, style_id, timestamp )
+        VALUES
+            ( ?, ?, ?, ?);
+        """, (new_order['metalId'], new_order['sizeId'], new_order['styleId'], new_order['timestamp']))
 
-    # Return the dictionary with `id` property added
-    return order
+        # The `lastrowid` property on the cursor will return
+        # the primary key of the last thing that got added to
+        # the database.
+        id = db_cursor.lastrowid
+
+        # Add the `id` property to the order dictionary that
+        # was sent by the client so that the client sees the
+        # primary key in the response.
+        new_order['id'] = id
+
+    return new_order
 
 def delete_order(id):
-    """DELETE order"""
-    # Initial -1 value for order index, in case one isn't found
-    order_index = -1
+    """Deletes a single order by id."""
+    with sqlite3.connect("./kneeldiamonds.sqlite3") as conn:
+        db_cursor = conn.cursor()
 
-    # Iterate the ORDERS list, but use enumerate() so that you
-    # can access the index value of each item
-    # enumerate allows you to loop thru element and index at same time
-    for index, order in enumerate(ORDERS):
-        if order["id"] == id:
-            # Found the animal. Store the current index.
-            order_index = index
-
-    # If the animal was found, use pop(int) to remove it from list
-    if order_index >= 0:
-        ORDERS.pop(order_index)
+        db_cursor.execute("""
+        DELETE FROM orders
+        WHERE id = ?
+        """, (id, ))
 
 def update_order(id, new_order):
     """UPDATE order"""
@@ -77,6 +165,6 @@ def update_order(id, new_order):
     # you can access the index value of each item.
     for index, order in enumerate(ORDERS):
         if order["id"] == id:
-            # Found the animal. Update the value.
+            # Found the order. Update the value.
             ORDERS[index] = new_order
             break
